@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Система управления заявками — ServiceFlow</title>
+    <style>
+      :root {
+          --primary: #4f46e5;
+          --primary-hover: #4338ca;
+          --bg: #f8fafc;
+          --card-bg: #ffffff;
+          --text-main: #1e293b;
+          --text-muted: #64748b;
+          --border: #e2e8f0;
+          --status-new: #dbeafe; --status-new-text: #1e40af;
+          --status-assigned: #fef3c7; --status-assigned-text: #92400e;
+          --status-progress: #dcfce7; --status-progress-text: #166534;
+          --status-done: #f1f5f9; --status-done-text: #475569;
+          --status-canceled: #fee2e2; --status-canceled-text: #991b1b;
+      }
+
+      * {
+          box-sizing: border-box;
+          margin: 0;
+          padding: 0;
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      }
+
+      body {
+          background-color: var(--bg);
+          color: var(--text-main);
+          line-height: 1.5;
+          padding: 20px;
+          min-height: 100vh;
+      }
+
+      .container {
+          max-width: 900px;
+          margin: 0 auto;
+      }
+
+      header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 15px;
+          margin-bottom: 30px;
+          background: var(--card-bg);
+          padding: 15px 25px;
+          border-radius: 12px;
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+      }
+
+      .role-switcher {
+          display: flex;
+          gap: 10px;
+          align-items: center;
+          flex-wrap: wrap;
+      }
+
+      button, select {
+          padding: 8px 16px;
+          border-radius: 8px;
+          border: 1px solid var(--border);
+          background: white;
+          cursor: pointer;
+          transition: all 0.2s;
+          font-weight: 500;
+          font-size: 0.95rem;
+          height: 42px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          line-height: 1.2;
+      }
+
+      button.active {
+          background: var(--primary);
+          color: white;
+          border-color: var(--primary);
+      }
+
+      button.primary-btn {
+          background: var(--primary);
+          color: white;
+          border: none;
+      }
+
+      button.primary-btn:hover { background: var(--primary-hover); }
+
+      .card {
+          background: var(--card-bg);
+          padding: 25px;
+          border-radius: 12px;
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+          margin-bottom: 20px;
+          overflow: hidden;
+      }
+
+      h2 { margin-bottom: 20px; font-size: 1.25rem; font-weight: 600; }
+
+      .form-group {
+          margin-bottom: 15px;
+      }
+
+      label {
+          display: block;
+          margin-bottom: 5px;
+          font-size: 0.875rem;
+          color: var(--text-muted);
+      }
+
+      input, textarea, select {
+          width: 100%;
+          padding: 10px 12px;
+          border: 1px solid var(--border);
+          border-radius: 8px;
+          outline: none;
+          font-size: 1rem;
+          transition: border-color 0.2s;
+          background: #fff;
+      }
+
+      textarea { resize: vertical; }
+
+      input:focus, textarea:focus { border-color: var(--primary); }
+
+      .hidden { display: none; }
+
+      .request-item {
+          border: 1px solid var(--border);
+          border-radius: 10px;
+          padding: 20px;
+          margin-bottom: 12px;
+          display: grid;
+          grid-template-columns: 1fr auto;
+          gap: 15px;
+          align-items: start;
+          background: #fff;
+          transition: transform 0.1s;
+          overflow: hidden;
+      }
+
+      .request-info {
+          min-width: 0;
+      }
+
+      .request-info h4 {
+          font-size: 1.1rem;
+          margin: 6px 0;
+          overflow-wrap: break-word;
+          word-break: break-word;
+      }
+
+      .request-meta {
+          font-size: 0.85rem;
+          color: var(--text-muted);
+          margin-bottom: 8px;
+          overflow-wrap: break-word;
+          word-break: break-word;
+      }
+
+      .problem-text {
+          font-size: 0.95rem;
+          overflow-wrap: break-word;
+          word-break: break-word;
+          white-space: pre-wrap;
+      }
+
+      .badge {
+          padding: 4px 10px;
+          border-radius: 6px;
+          font-size: 0.7rem;
+          font-weight: 700;
+          text-transform: uppercase;
+          display: inline-block;
+          line-height: 1.4;
+      }
+
+      .status-new { background: var(--status-new); color: var(--status-new-text); }
+      .status-assigned { background: var(--status-assigned); color: var(--status-assigned-text); }
+      .status-in_progress { background: var(--status-progress); color: var(--status-progress-text); }
+      .status-done { background: var(--status-done); color: var(--status-done-text); }
+      .status-canceled { background: var(--status-canceled); color: var(--status-canceled-text); }
+
+      .toast-container {
+          position: fixed;
+          bottom: 24px;
+          right: 24px;
+          z-index: 1000;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          max-width: calc(100vw - 48px);
+      }
+
+      .toast {
+          background: #1e293b;
+          color: white;
+          padding: 14px 24px;
+          border-radius: 10px;
+          box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.15);
+          animation: slideIn 0.3s ease-out;
+          font-size: 0.9rem;
+          word-break: break-word;
+      }
+
+      @keyframes slideIn {
+          from { transform: translateX(100%); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
+      }
+
+      .filters {
+          display: flex;
+          gap: 10px;
+          margin-bottom: 20px;
+          max-width: 300px;
+      }
+
+      .actions {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          min-width: 180px;
+          width: 100%;
+      }
+
+      .dispatcher-actions {
+          display: flex;
+          gap: 8px;
+          width: 100%;
+          align-items: center;
+      }
+
+      .dispatcher-actions select {
+          height: 42px;
+          font-size: 0.85rem;
+          padding: 0 8px;
+          flex: 1;
+      }
+
+      .btn-cancel { color: #dc2626; border-color: #fecaca; width: 100%; height: 42px; }
+      .btn-cancel:hover { background: #fef2f2; }
+
+      .info-tag {
+          font-size: 0.75rem;
+          background: #f1f5f9;
+          padding: 4px 8px;
+          border-radius: 4px;
+          margin-top: 8px;
+          display: inline-block;
+          word-break: break-word;
+      }
+
+      .grid-responsive {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 15px;
+      }
+
+      @media (max-width: 640px) {
+          header {
+              flex-direction: column;
+              align-items: flex-start;
+          }
+          .role-switcher {
+              width: 100%;
+          }
+          .grid-responsive {
+              grid-template-columns: 1fr;
+          }
+          .request-item {
+              grid-template-columns: 1fr;
+          }
+          .actions {
+              min-width: unset;
+          }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <div>
+          <strong style="font-size: 1.4rem; color: var(--primary)"
+            >ServiceFlow</strong
+          >
+        </div>
+        <div class="role-switcher" id="roleSwitcher">
+          <button onclick="setRole('client')" id="btn-client" class="active">
+            Клиент
+          </button>
+          <button onclick="setRole('dispatcher')" id="btn-dispatcher">
+            Диспетчер
+          </button>
+          <select
+            id="masterSelect"
+            onchange="setRole('master', this.value)"
+            style="width: auto;"
+          >
+            <option value="">Выбор Мастера</option>
+            <option value="Иванов">Мастер Иванов</option>
+            <option value="Петров">Мастер Петров</option>
+          </select>
+        </div>
+      </header>
+
+      <!-- Client View -->
+      <section id="view-client" class="view">
+        <div class="card">
+          <h2>Новая заявка на ремонт</h2>
+          <form id="createRequestForm">
+            <div class="form-group">
+              <label>ФИО Клиента</label>
+              <input
+                type="text"
+                id="clientName"
+                required
+                placeholder="Введите ваше имя"
+              />
+            </div>
+            <div class="grid-responsive">
+              <div class="form-group">
+                <label>Контактный телефон</label>
+                <input
+                  type="tel"
+                  id="phone"
+                  required
+                  placeholder="+7 (___) ___-__-__"
+                />
+              </div>
+              <div class="form-group">
+                <label>Адрес объекта</label>
+                <input
+                  type="text"
+                  id="address"
+                  required
+                  placeholder="Улица, дом, кв"
+                />
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Описание проблемы</label>
+              <textarea
+                id="problemText"
+                rows="4"
+                required
+                placeholder="Опишите поломку подробно..."
+              ></textarea>
+            </div>
+            <button
+              type="submit"
+              class="primary-btn"
+              style="width: 100%; height: 52px; font-size: 1rem;"
+            >
+              Отправить в сервис
+            </button>
+          </form>
+        </div>
+      </section>
+
+      <!-- Dispatcher View -->
+      <section id="view-dispatcher" class="view hidden">
+        <div class="card">
+          <h2>Панель управления</h2>
+          <div class="filters">
+            <select id="filterStatus" onchange="renderDispatcherRequests()">
+              <option value="all">Все статусы</option>
+              <option value="new">Новые</option>
+              <option value="assigned">Назначенные</option>
+              <option value="in_progress">В работе</option>
+              <option value="done">Завершенные</option>
+              <option value="canceled">Отмененные</option>
+            </select>
+          </div>
+          <div id="dispatcherList"></div>
+        </div>
+      </section>
+
+      <!-- Master View -->
+      <section id="view-master" class="view hidden">
+        <div class="card">
+          <div
+            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;"
+          >
+            <h2 style="margin-bottom: 0px;">Задачи мастера</h2>
+            <span
+              id="currentMasterBadge"
+              class="badge status-assigned"
+              style="padding: 8px 12px; font-size: 0.9rem;"
+            ></span>
+          </div>
+          <div id="masterList"></div>
+        </div>
+      </section>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script>
+      // Инициализация данных
+      let requests = JSON.parse(localStorage.getItem('srv_requests_v2')) || [];
+
+      // Добавление 2 рандомных задач при первом запуске
+      if (requests.length === 0) {
+          requests = [
+              {
+                  id: Date.now() - 100000,
+                  clientName: "Александр Соколов",
+                  phone: "+7 (921) 555-12-34",
+                  address: "ул. Пушкина, д. 42 / кв. 15",
+                  problemText: "Разбито стекло балконной двери, дует сильный сквозняк.",
+                  status: "new",
+                  assignedTo: "",
+                  createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
+                  updatedAt: new Date(Date.now() - 3600000 * 2).toISOString()
+              },
+              {
+                  id: Date.now() - 50000,
+                  clientName: "Елена Кузнецова",
+                  phone: "+7 (905) 777-88-99",
+                  address: "Ленинский пр., д. 100, блок Б",
+                  problemText: "Перестал работать бойлер, выбивает пробки при включении.",
+                  status: "assigned",
+                  assignedTo: "Иванов",
+                  createdAt: new Date(Date.now() - 3600000 * 5).toISOString(),
+                  updatedAt: new Date(Date.now() - 3600000 * 4).toISOString()
+              }
+          ];
+          localStorage.setItem('srv_requests_v2', JSON.stringify(requests));
+      }
+
+      let currentRole = 'client';
+      let currentMaster = '';
+
+      // Серверная логика эмуляции предотвращения Race Condition
+      const MockServer = {
+          async transitionToWork(requestId) {
+              // Эмуляция сетевой задержки
+              await new Promise(r => setTimeout(r, 800));
+
+              // Читаем актуальное состояние из хранилища (имитация DB)
+              const latestRequests = JSON.parse(localStorage.getItem('srv_requests_v2'));
+              const req = latestRequests.find(r => r.id === requestId);
+
+              if (!req) return { status: 404, message: 'Заявка не найдена' };
+
+              // ПРОВЕРКА РЕЖИМА ГОНКИ: Только статус 'assigned' может перейти в 'in_progress'
+              if (req.status !== 'assigned') {
+                  return {
+                      status: 409,
+                      message: `[409 Conflict] Заявка уже занята. Текущий статус: "${req.status}". Возможно, другой мастер успел перехватить её.`
+                  };
+              }
+
+              // Обновляем статус в нашей памяти и сохраняем
+              const idx = requests.findIndex(r => r.id === requestId);
+              requests[idx].status = 'in_progress';
+              requests[idx].updatedAt = new Date().toISOString();
+              saveData();
+
+              return { status: 200, message: 'Статус обновлен: В работе' };
+          }
+      };
+
+      function saveData() {
+          localStorage.setItem('srv_requests_v2', JSON.stringify(requests));
+      }
+
+      function showToast(message) {
+          const container = document.getElementById('toastContainer');
+          const toast = document.createElement('div');
+          toast.className = 'toast';
+          toast.innerText = message;
+          container.appendChild(toast);
+          setTimeout(() => {
+              toast.style.opacity = '0';
+              toast.style.transform = 'translateY(20px)';
+              setTimeout(() => toast.remove(), 300);
+          }, 4000);
+      }
+
+      function setRole(role, master = '') {
+          currentRole = role;
+          currentMaster = master;
+
+          document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
+          document.querySelectorAll('#roleSwitcher button').forEach(b => b.classList.remove('active'));
+
+          if (role === 'client') {
+              document.getElementById('view-client').classList.remove('hidden');
+              document.getElementById('btn-client').classList.add('active');
+          } else if (role === 'dispatcher') {
+              document.getElementById('view-dispatcher').classList.remove('hidden');
+              document.getElementById('btn-dispatcher').classList.add('active');
+              renderDispatcherRequests();
+          } else if (role === 'master' && master) {
+              document.getElementById('view-master').classList.remove('hidden');
+              document.getElementById('currentMasterBadge').innerText = master;
+              renderMasterRequests();
+          }
+      }
+
+      document.getElementById('createRequestForm').onsubmit = (e) => {
+          e.preventDefault();
+          const newReq = {
+              id: Date.now(),
+              clientName: document.getElementById('clientName').value,
+              phone: document.getElementById('phone').value,
+              address: document.getElementById('address').value,
+              problemText: document.getElementById('problemText').value,
+              status: 'new',
+              assignedTo: '',
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+          };
+          requests.push(newReq);
+          saveData();
+          showToast('✅ Ваша заявка успешно создана');
+          e.target.reset();
+      };
+
+      function assignMaster(id) {
+          const masterSelector = document.getElementById(`assign-${id}`);
+          const master = masterSelector.value;
+          if (!master) return;
+
+          const req = requests.find(r => r.id === id);
+          req.status = 'assigned';
+          req.assignedTo = master;
+          req.updatedAt = new Date().toISOString();
+          saveData();
+          showToast(`Мастер ${master} назначен`);
+          renderDispatcherRequests();
+      }
+
+      function cancelRequest(id) {
+          const req = requests.find(r => r.id === id);
+          req.status = 'canceled';
+          req.updatedAt = new Date().toISOString();
+          saveData();
+          showToast('Заявка отменена');
+          renderDispatcherRequests();
+      }
+
+      async function takeInWork(id) {
+          const result = await MockServer.transitionToWork(id);
+          showToast(result.message);
+          renderMasterRequests();
+      }
+
+      function completeRequest(id) {
+          const req = requests.find(r => r.id === id);
+          req.status = 'done';
+          req.updatedAt = new Date().toISOString();
+          saveData();
+          showToast('Заявка выполнена');
+          renderMasterRequests();
+      }
+
+      function renderDispatcherRequests() {
+          const filter = document.getElementById('filterStatus').value;
+          const list = document.getElementById('dispatcherList');
+          list.innerHTML = '';
+
+          const filtered = requests.filter(r => filter === 'all' || r.status === filter);
+
+          if (!filtered.length) {
+              list.innerHTML = '<div style="text-align:center; padding: 40px; color: var(--text-muted)">Пусто</div>';
+              return;
+          }
+
+          filtered.sort((a,b) => b.id - a.id).forEach(req => {
+              const div = document.createElement('div');
+              div.className = 'request-item';
+              div.innerHTML = `
+                  <div class="request-info">
+                      <span class="badge status-${req.status}">${req.status === 'new' ? 'Новая' : req.status === 'assigned' ? 'Ожидает' : req.status === 'in_progress' ? 'В работе' : req.status === 'done' ? 'Завершена' : 'Отменена'}</span>
+                      <h4>${req.clientName}</h4>
+                      <p class="request-meta">📍 ${req.address} • 📞 ${req.phone}</p>
+                      <p class="problem-text">${req.problemText}</p>
+                      ${req.assignedTo ? `<div class="info-tag">Ответственный: ${req.assignedTo}</div>` : ''}
+                  </div>
+                  <div class="actions">
+                      ${req.status === 'new' ? `
+                          <div class="dispatcher-actions">
+                              <select id="assign-${req.id}">
+                                  <option value="">Выбор...</option>
+                                  <option value="Иванов">Иванов</option>
+                                  <option value="Петров">Петров</option>
+                              </select>
+                              <button onclick="assignMaster(${req.id})" class="primary-btn">OK</button>
+                          </div>
+                      ` : ''}
+                      ${(req.status === 'new' || req.status === 'assigned') ? `<button onclick="cancelRequest(${req.id})" class="btn-cancel">Отменить</button>` : ''}
+                  </div>
+              `;
+              list.appendChild(div);
+          });
+      }
+
+      function renderMasterRequests() {
+          const list = document.getElementById('masterList');
+          list.innerHTML = '';
+
+          const myRequests = requests.filter(r => r.assignedTo === currentMaster && r.status !== 'canceled');
+
+          if (!myRequests.length) {
+              list.innerHTML = '<div style="text-align:center; padding: 40px; color: var(--text-muted)">У вас пока нет задач</div>';
+              return;
+          }
+
+          myRequests.sort((a,b) => b.id - a.id).forEach(req => {
+              const div = document.createElement('div');
+              div.className = 'request-item';
+              div.innerHTML = `
+                  <div class="request-info">
+                      <span class="badge status-${req.status}">${req.status === 'assigned' ? 'Ожидание' : req.status === 'in_progress' ? 'Активна' : 'Выполнена'}</span>
+                      <h4>${req.clientName}</h4>
+                      <p class="request-meta">🏠 ${req.address}</p>
+                      <p class="problem-text">${req.problemText}</p>
+                  </div>
+                  <div class="actions">
+                      ${req.status === 'assigned' ? `<button onclick="takeInWork(${req.id})" class="primary-btn" style="height: 48px">Взять в работу</button>` : ''}
+                      ${req.status === 'in_progress' ? `<button onclick="completeRequest(${req.id})" style="background:#22c55e; color:white; border:none; height: 48px">Завершить задачу</button>` : ''}
+                  </div>
+              `;
+              list.appendChild(div);
+          });
+      }
+
+      // Начальный выбор
+      setRole('client');
+    </script>
+  </body>
+</html>
+
+<!-- 
+  ПРОВЕРКА ГОНКИ (Race Condition Check):
+  Чтобы проверить корректность работы при параллельных запросах:
+  1. Откройте приложение в двух разных вкладках браузера.
+  2. В обеих вкладках выберите роль "Диспетчер" и убедитесь, что есть заявка в статусе "Новая" (или создайте её).
+  3. В ПЕРВОЙ вкладке назначьте мастера (например, Иванов).
+  4. Перейдите во ВТОРУЮ вкладку, выберите мастера Иванова. Вы увидите ту же заявку.
+  5. Во второй вкладке вызовите консоль разработчика (F12) и найдите кнопку "Взять в работу". 
+  6. Чтобы имитировать одновременный запрос вручную: 
+     Кликните кнопку "Взять в работу" одновременно в двух вкладках (либо во второй вкладке,
+     если в первой уже нажали, но "сервер" еще не ответил).
+  7. В коде установлена задержка MockServer.transitionToWork в 800мс.
+  8. Первая вкладка получит успех (200), а вторая (даже если кнопка была доступна на экране) 
+     получит статус 409 Conflict, так как состояние в хранилище уже изменилось.
+-->
